@@ -7,11 +7,13 @@
  * `entrc/entrc-backend`, the CircleCI check groups, the `preview-app`/`canix-UAT` label squares,
  * the Linear/Jira gates and the `/cnx:` command suffixes.
  *
- * Three cheap subprocesses behind one 60s cache:
- *   1. `git branch --show-current` + `git remote get-url origin` — which branch, which repo.
+ * Five cheap subprocesses behind one 60s cache:
+ *   1. `git branch --show-current` and `git remote get-url origin` — which branch, which repo.
  *   2. `gh pr view <branch> --repo <origin>` — is there a PR, and its url.
  *   3. `gh api graphql` on that url — unresolved review threads, which `gh pr view` cannot
  *      report at all, plus reviewers and the check rollup in the same round trip.
+ *   4. `gh pr list --repo <origin>` — the repo's other open PRs, for the second line, in one
+ *      round trip for all of them.
  */
 
 /** How long an answer is reused before asking `gh` again. */
@@ -114,7 +116,7 @@ export function checksEmoji(counts: CheckCounts): string {
  * What to do now, in blocker order. Generic port of CNX `getNextAction`: same ladder, minus the
  * Linear and label gates and the `/cnx:` command suffixes.
  */
-export function nextAction(pr: PrStatus): string {
+export function nextAction(pr: PrStatus, reviewersUnknown = false): string {
 	if (pr.state !== "OPEN") return "";
 	const emoji = checksEmoji(countChecks(pr.checks));
 
@@ -125,7 +127,8 @@ export function nextAction(pr: PrStatus): string {
 		const n = pr.unresolvedComments;
 		return `Resolve ${n} review comment${n > 1 ? "s" : ""}`;
 	}
-	if (pr.humanReviewers === 0) return "Set reviewers";
+	// Never claim "Set reviewers" off a reviewer count we did not fetch.
+	if (!reviewersUnknown && pr.humanReviewers === 0) return "Set reviewers";
 	if (pr.reviewDecision === "CHANGES_REQUESTED")
 		return "Address changes requested";
 	if (pr.reviewDecision !== "APPROVED") return "Waiting for approval";
@@ -138,13 +141,17 @@ export function nextAction(pr: PrStatus): string {
  * PR. One line on purpose — `ctx.ui.setStatus` sanitizes newlines and truncates to the terminal
  * width, so the next action rides inline after the arrow.
  */
-export function renderStatus(pr: PrStatus | undefined): string | undefined {
+export function renderStatus(
+	pr: PrStatus | undefined,
+	opts: { label?: string; reviewersUnknown?: boolean } = {},
+): string | undefined {
 	if (!pr) return undefined;
 	// OSC8 hyperlink, so `#64` is clickable in terminals that support it.
+	const text = opts.label ?? `#${pr.number}`;
 	const label = pr.url
-		? `\x1b]8;;${pr.url}\x1b\\${CYAN}#${pr.number}${RESET}\x1b]8;;\x1b\\`
-		: `#${pr.number}`;
-	const head = `PR ${label}`;
+		? `\x1b]8;;${pr.url}\x1b\\${CYAN}${text}${RESET}\x1b]8;;\x1b\\`
+		: text;
+	const head = opts.label ? label : `PR ${label}`;
 
 	if (pr.state === "MERGED") return `${head} ${GREEN}merged${RESET}`;
 	if (pr.state === "CLOSED") return `${head} ${RED}closed${RESET}`;
@@ -176,7 +183,7 @@ export function renderStatus(pr: PrStatus | undefined): string | undefined {
 	if (pr.mergeable === "CONFLICTING") parts.push(`${RED}conflicts${RESET}`);
 
 	const line = `${head} ${parts.join(` ${DIM}·${RESET} `)}`;
-	const action = nextAction(pr);
+	const action = nextAction(pr, opts.reviewersUnknown);
 	return action ? `${line} ${DIM}→ ${action}${RESET}` : line;
 }
 
@@ -291,28 +298,115 @@ async function fetchDetail(url: string, cwd: string): Promise<PrDetail> {
 	}
 }
 
-async function load(cwd: string): Promise<string | undefined> {
-	const branch = await run(["git", "branch", "--show-current"], cwd);
-	if (!branch || TRUNK[branch]) return undefined;
+/** `git@github.com:o/r.git` | `https://github.com/o/r.git` | `https://github.com/o/r` -> `o/r` */
+export function repoSlug(originUrl: string): string | undefined {
+	const m = originUrl
+		.trim()
+		.match(
+			/^(?:git@|ssh:\/\/git@|https?:\/\/)[^/:]+[/:]([^/:]+)\/([^/]+?)(?:\.git)?\/?$/,
+		);
+	return m ? `${m[1]}/${m[2]}` : undefined;
+}
 
-	// The repo is whatever `origin` points at — never configured, never guessed from the path.
-	const origin = await run(["git", "remote", "get-url", "origin"], cwd);
-	if (!origin) return undefined;
+/** Deterministic rotation: which item a redraw shows. Empty list -> undefined. */
+export function pickCycle<T>(items: T[], tick: number): T | undefined {
+	if (items.length === 0) return undefined;
+	// The double modulo keeps a negative tick in range instead of reading off the front.
+	return items[((tick % items.length) + items.length) % items.length];
+}
 
+/** A `gh pr list --json` row: `statusCheckRollup` is a flat array, not the GraphQL nesting. */
+interface PrListItem extends PrView {
+	statusCheckRollup?: RollupNode[];
+}
+
+const LIST_FIELDS =
+	"number,url,isDraft,mergeable,reviewDecision,statusCheckRollup";
+
+/**
+ * The repo's other open PRs, pre-rendered with their `(i/n)` position so a redraw only has to
+ * pick one. One subprocess for all of them: `gh pr list` can answer neither unresolved threads
+ * nor reviewers, and a GraphQL round trip per PR would cost 20 subprocesses for those two
+ * numbers. Sorted by number descending, so the rotation order is stable between redraws.
+ */
+async function loadOthers(
+	origin: string,
+	cwd: string,
+	exclude: number | undefined,
+): Promise<string[]> {
+	const slug = repoSlug(origin);
+	if (!slug) return [];
+	const out = await run(
+		[
+			"gh",
+			"pr",
+			"list",
+			"--repo",
+			origin,
+			"--state",
+			"open",
+			"--limit",
+			"20",
+			"--json",
+			LIST_FIELDS,
+		],
+		cwd,
+	);
+	if (!out) return [];
+	let list: PrListItem[];
+	try {
+		// Trusted shape: `gh`'s own --json contract.
+		list = JSON.parse(out) as PrListItem[];
+	} catch {
+		return [];
+	}
+	const open = list
+		.filter(
+			(p): p is PrListItem & { number: number } =>
+				typeof p.number === "number" && p.number !== exclude,
+		)
+		.sort((a, b) => b.number - a.number);
+	return open.map((p, i) => {
+		const line =
+			renderStatus(
+				{
+					number: p.number,
+					url: p.url ?? "",
+					state: "OPEN",
+					isDraft: p.isDraft ?? false,
+					mergeable: p.mergeable ?? "UNKNOWN",
+					reviewDecision: p.reviewDecision ?? "",
+					unresolvedComments: 0,
+					// Not fetched — `reviewersUnknown` stops the ladder claiming "Set reviewers".
+					humanReviewers: 0,
+					checks: (p.statusCheckRollup ?? []).map(toCheckInfo),
+				},
+				{ label: `${slug}#${p.number}`, reviewersUnknown: true },
+			) ?? "";
+		return `${line} ${DIM}(${i + 1}/${open.length})${RESET}`;
+	});
+}
+
+/** The first line, plus the PR number so the others line can leave it out. */
+async function loadCurrent(
+	branch: string,
+	origin: string,
+	cwd: string,
+): Promise<{ line?: string; number?: number }> {
 	const fields = "number,url,state,isDraft,mergeable,reviewDecision";
 	const out = await run(
 		["gh", "pr", "view", branch, "--repo", origin, "--json", fields],
 		cwd,
 	);
-	if (!out) return undefined;
+	if (!out) return {};
 	let view: PrView;
 	try {
 		// Trusted shape: `gh`'s own --json contract.
 		view = JSON.parse(out) as PrView;
 	} catch {
-		return undefined;
+		return {};
 	}
-	if (!view.number) return undefined;
+	if (!view.number) return {};
 
 	const base: PrStatus = {
 		number: view.number,
@@ -326,25 +420,59 @@ async function load(cwd: string): Promise<string | undefined> {
 		checks: [],
 	};
 	// A merged/closed PR renders as one word — no point paying for the detail query.
-	if (base.state !== "OPEN") return renderStatus(base);
-	return renderStatus({ ...base, ...(await fetchDetail(base.url, cwd)) });
+	const line =
+		base.state === "OPEN"
+			? renderStatus({ ...base, ...(await fetchDetail(base.url, cwd)) })
+			: renderStatus(base);
+	return { line, number: base.number };
+}
+
+interface Snapshot {
+	current?: string;
+	/** Pre-rendered and ordered; `tick` only indexes into this. */
+	others: string[];
+}
+
+async function load(cwd: string): Promise<Snapshot> {
+	const branch = await run(["git", "branch", "--show-current"], cwd);
+	// The repo is whatever `origin` points at — never configured, never guessed from the path.
+	const origin = await run(["git", "remote", "get-url", "origin"], cwd);
+	// Not a git repo, or nothing to ask about: neither line has anything to say.
+	if (!origin) return { others: [] };
+
+	// Trunk never has a PR of its own (`gh pr view` there answers with a merged one), but the
+	// repo's other open PRs still do — so this must not skip the list query.
+	const current =
+		branch && !TRUNK[branch]
+			? await loadCurrent(branch, origin, cwd)
+			: undefined;
+	return {
+		current: current?.line,
+		others: await loadOthers(origin, cwd, current?.number),
+	};
 }
 
 /** cwd -> last answer, so a redraw between turns costs nothing. */
-const cache = new Map<string, { at: number; line?: string }>();
+const cache = new Map<string, { at: number; snap: Snapshot }>();
 
 /**
- * The statusline segment for `cwd`'s branch, undefined when there is nothing to show (not a repo,
- * on trunk, no `origin`, no PR, no `gh`). Cached for a minute per directory.
+ * Both statusline lines for `cwd`. `current` is the branch's own PR, undefined when there is
+ * nothing to show (not a repo, on trunk, no `origin`, no PR, no `gh`); `others` is one of the
+ * repo's other open PRs, undefined when there are none. Cached for a minute per directory —
+ * `tick` only rotates which other PR is shown, so cycling never costs a subprocess.
  */
-export async function prLine(
+export async function prLines(
 	cwd: string,
-	now = Date.now(),
-): Promise<string | undefined> {
-	const hit = cache.get(cwd);
-	if (hit && now - hit.at < TTL_MS) return hit.line;
-
-	const line = await load(cwd);
-	cache.set(cwd, { at: now, line });
-	return line;
+	opts: { now?: number; tick?: number } = {},
+): Promise<{ current?: string; others?: string }> {
+	const now = opts.now ?? Date.now();
+	let hit = cache.get(cwd);
+	if (!hit || now - hit.at >= TTL_MS) {
+		hit = { at: now, snap: await load(cwd) };
+		cache.set(cwd, hit);
+	}
+	return {
+		current: hit.snap.current,
+		others: pickCycle(hit.snap.others, opts.tick ?? 0),
+	};
 }
