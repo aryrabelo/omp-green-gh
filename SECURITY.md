@@ -41,6 +41,23 @@ segment. The relevant security surface is:
 
 The extension collects **no telemetry**.
 
+## Dependency advisories
+
+The extension has **zero runtime dependencies** — see `package.json`: only `devDependencies`
+and `peerDependencies` exist, and nothing is bundled or redistributed. It ships the
+TypeScript in `src/` and nothing else.
+
+CI runs `bun audit` as an advisory (`continue-on-error`) job, so a red audit does not block
+a merge. As of `v0.1.0` it reports two high advisories, both reachable only through the
+development-time harness package:
+
+- `adm-zip` via `@oh-my-pi/pi-coding-agent > @oh-my-pi/pi-mnemopi > onnxruntime-node`
+- `sharp` via `@oh-my-pi/pi-coding-agent > @huggingface/transformers`
+
+Neither is in any path this extension executes or distributes, and neither can be fixed
+from this repository — the harness owns those trees. They are listed here rather than
+silenced so the audit output is not mistaken for a clean bill of health.
+
 ## Supported versions
 
 The latest release is `0.1.0`. Security fixes target the latest release and
