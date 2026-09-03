@@ -44,3 +44,5 @@ bun run lint
 
 `src/pr-status.ts` holds the whole thing: the `gh` call, the rollup fold and the rendering.
 `src/main.ts` is only the wiring into `ctx.ui.setWidget`.
+
+<!-- smoke: proves the widget reads a live PR -->
