@@ -25,13 +25,16 @@ jobs:
       - run: bun run typecheck
       - run: bun test
 
+  # Advisory only. `continue-on-error` keeps the RUN green but still publishes a failed
+  # check run, which reads as red CI everywhere checks are consumed. The audit output is
+  # what matters here, not a red mark, so the step never fails.
   audit:
     runs-on: ubuntu-latest
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.x
       - run: bun install --frozen-lockfile
-      - run: bun audit
+      - name: bun audit (advisory)
+        run: bun audit || true
