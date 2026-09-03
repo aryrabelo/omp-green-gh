@@ -1,7 +1,7 @@
 {
 	"name": "@aryrabelo/omp-green-gh",
 	"version": "0.1.0",
-	"description": "OMP harness extension: the current branch's pull request status (checks, review, conflicts) under the editor.",
+	"description": "OMP harness extension: the current branch's pull request status in your statusline — is it green, and what is blocking it?",
 	"type": "module",
 	"license": "MIT",
 	"author": "Ary Rabelo",

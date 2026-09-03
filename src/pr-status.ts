@@ -118,18 +118,18 @@ export function nextAction(pr: PrStatus): string {
 	if (pr.state !== "OPEN") return "";
 	const emoji = checksEmoji(countChecks(pr.checks));
 
-	if (emoji === "❌") return "Corrigir CI";
-	if (pr.mergeable === "CONFLICTING") return "Resolver conflitos com a base";
-	if (pr.isDraft) return "Publicar draft";
+	if (emoji === "❌") return "Fix CI";
+	if (pr.mergeable === "CONFLICTING") return "Resolve conflicts with base";
+	if (pr.isDraft) return "Publish draft";
 	if (pr.unresolvedComments > 0) {
 		const n = pr.unresolvedComments;
-		return `Resolver ${n} review comment${n > 1 ? "s" : ""}`;
+		return `Resolve ${n} review comment${n > 1 ? "s" : ""}`;
 	}
-	if (pr.humanReviewers === 0) return "Setar reviewers";
+	if (pr.humanReviewers === 0) return "Set reviewers";
 	if (pr.reviewDecision === "CHANGES_REQUESTED")
-		return "Ajustar changes requested";
-	if (pr.reviewDecision !== "APPROVED") return "Aguardar aprovação";
-	if (emoji === "⌛") return "CI rodando...";
+		return "Address changes requested";
+	if (pr.reviewDecision !== "APPROVED") return "Waiting for approval";
+	if (emoji === "⌛") return "CI running";
 	return "Merge PR";
 }
 

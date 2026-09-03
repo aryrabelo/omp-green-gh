@@ -1,0 +1,88 @@
+name: Bug report
+description: Report something that isn't working as expected
+labels: ["bug"]
+body:
+  - type: checkboxes
+    id: gh-precheck
+    attributes:
+      label: "`gh` pre-check"
+      description: >
+        This is the number-one false bug report for this project. Run both commands from
+        the same directory where the segment is wrong, and confirm they succeed before
+        filing. The extension has no credentials of its own — `gh` owns authentication.
+      options:
+        - label: "`gh auth status` succeeds"
+          required: true
+        - label: "`gh pr view <branch>` returns a PR from that same directory"
+          required: true
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened, and what did you expect?
+      description: A clear description of the bug and the behavior you expected instead.
+    validations:
+      required: true
+  - type: textarea
+    id: segment
+    attributes:
+      label: The statusline segment you saw
+      description: >
+        Paste the exact segment text, or say that nothing was shown at all.
+      placeholder: |
+        PR #64 ⌛ 3/12 · review required · 💬 2 → Resolve 2 review comments
+        (or: nothing was shown)
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Check out a branch with an open PR
+        2. Start OMP in that repository
+        3. Look at the statusline after the first turn
+        4. See the wrong segment
+    validations:
+      required: true
+  - type: input
+    id: os
+    attributes:
+      label: OS
+      placeholder: "e.g. macOS 15.6, Ubuntu 24.04"
+    validations:
+      required: true
+  - type: input
+    id: bun-version
+    attributes:
+      label: "`bun --version`"
+      placeholder: "e.g. 1.2.4"
+    validations:
+      required: true
+  - type: input
+    id: gh-version
+    attributes:
+      label: "`gh --version`"
+      placeholder: "e.g. gh version 2.62.0"
+    validations:
+      required: true
+  - type: input
+    id: omp-version
+    attributes:
+      label: OMP (Oh My Pi) version
+      placeholder: "e.g. 16.2.0"
+    validations:
+      required: true
+  - type: input
+    id: extension-version
+    attributes:
+      label: omp-green-gh version or commit
+      placeholder: "e.g. 0.1.0 or a commit SHA"
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else?
+      description: Logs, screenshots, or anything unusual about the repository or remote.
+    validations:
+      required: false

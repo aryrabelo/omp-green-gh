@@ -1,0 +1,52 @@
+name: Feature request
+description: Suggest an idea for the extension
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Describe the use case, not just the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: What would you like the statusline segment to show or do?
+    validations:
+      required: false
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+    validations:
+      required: false
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      description: >
+        This extension is one statusline segment and nothing more. The README's
+        Non-goals (v1) list is a scope fence, not a backlog:
+
+
+        - No PR management: it never merges, approves, comments, or labels. It reports.
+
+        - No background watcher and no refresh timer — it redraws on session events only.
+
+        - No forge other than GitHub, and no GitHub access that bypasses `gh`.
+
+        - No multi-PR or multi-repo dashboard: one segment, the current branch, the
+        current directory.
+
+        - No configuration file: no custom thresholds, no per-repo check groups, no label
+        rules.
+
+        - No ticket-tracker integration (Linear, Jira) — deliberately cut from the CNX
+        original.
+
+        - No desktop or terminal notifications.
+      options:
+        - label: I've read the Non-goals (v1) list and this request does not cross that fence.
+          required: true

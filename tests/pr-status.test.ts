@@ -146,32 +146,32 @@ describe("nextAction", () => {
 					mergeable: "CONFLICTING",
 				}),
 			),
-		).toBe("Corrigir CI");
+		).toBe("Fix CI");
 		expect(nextAction(pr({ mergeable: "CONFLICTING", isDraft: true }))).toBe(
-			"Resolver conflitos com a base",
+			"Resolve conflicts with base",
 		);
 		expect(nextAction(pr({ isDraft: true, unresolvedComments: 2 }))).toBe(
-			"Publicar draft",
+			"Publish draft",
 		);
 		expect(nextAction(pr({ unresolvedComments: 2, humanReviewers: 0 }))).toBe(
-			"Resolver 2 review comments",
+			"Resolve 2 review comments",
 		);
 		expect(nextAction(pr({ unresolvedComments: 1 }))).toBe(
-			"Resolver 1 review comment",
+			"Resolve 1 review comment",
 		);
 		expect(
 			nextAction(
 				pr({ humanReviewers: 0, reviewDecision: "CHANGES_REQUESTED" }),
 			),
-		).toBe("Setar reviewers");
+		).toBe("Set reviewers");
 		expect(nextAction(pr({ reviewDecision: "CHANGES_REQUESTED" }))).toBe(
-			"Ajustar changes requested",
+			"Address changes requested",
 		);
 		expect(nextAction(pr({ reviewDecision: "REVIEW_REQUIRED" }))).toBe(
-			"Aguardar aprovação",
+			"Waiting for approval",
 		);
 		expect(nextAction(pr({ checks: [check({ status: "IN_PROGRESS" })] }))).toBe(
-			"CI rodando...",
+			"CI running",
 		);
 		expect(nextAction(pr())).toBe("Merge PR");
 	});
@@ -206,7 +206,7 @@ describe("renderStatus", () => {
 					}),
 				),
 			),
-		).toBe("PR #64 ❌ 2/3 · approved → Corrigir CI");
+		).toBe("PR #64 ❌ 2/3 · approved → Fix CI");
 	});
 
 	test("draft, review verdict, unresolved threads and conflicts all ride along", () => {
@@ -222,7 +222,7 @@ describe("renderStatus", () => {
 				),
 			),
 		).toBe(
-			"PR #64 draft · ✅ 1/1 · changes requested · 💬 3 · conflicts → Resolver conflitos com a base",
+			"PR #64 draft · ✅ 1/1 · changes requested · 💬 3 · conflicts → Resolve conflicts with base",
 		);
 	});
 
