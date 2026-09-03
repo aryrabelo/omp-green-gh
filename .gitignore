@@ -26,3 +26,6 @@ plans/
 *.db
 .beads-credential-key
 .beads/proxieddb/
+
+# Local harness config (machine-specific paths)
+.omp/
