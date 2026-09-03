@@ -1,35 +1,58 @@
 # omp-green-gh
 
-OMP harness extension. One line under the editor: **is the current branch's pull request green?**
+OMP harness extension. Two lines under the editor: **is the current branch's pull request green,
+and what is blocking it?**
 
 ```
-PR #64 ✓ 12/12 · approved
-PR #64 ● 3/12
-PR #64 ✗ 2/12 · changes requested · conflicts
-PR #64 draft · no checks
+PR #64 ✅ 12/12 · approved
+→ Merge PR
+
+PR #64 ⌛ 3/12 · review required · 💬 2
+→ Resolver 2 review comments
+
+PR #64 draft · ❌ 2/12 · conflicts
+→ Corrigir CI
 ```
 
 `#64` is an OSC8 hyperlink to the PR.
 
-Descendant of the Claude Code `statusline.ts` PR block (dotfiles-2025, `dot_claude/statusline.ts`),
-which only showed the PR number. This one answers the part that mattered: the status.
+## Origin
+
+Port of the PR block of the CNX Claude Code statusline
+([aryrabelo/cnx-claude](https://github.com/aryrabelo/cnx-claude)): `cnx/scripts/lib/pr-status.ts`
+for the data and the `getNextAction` ladder of `cnx/statusline/statusline.ts` for the second line.
+
+Everything installation-specific was cut, so this runs in any repository:
+
+| CNX | here |
+|---|---|
+| hardcoded `entrc/entrc-backend` | owner/repo from the `origin` remote |
+| `CI_MAIN_CHECKS` / `CI_E2E_CHECKS` / `CI_DEPLOY_PREVIEW_CHECKS` name lists | every check, one verdict |
+| `preview-app` / `canix-UAT` label squares | dropped |
+| Linear + Jira gates, `/cnx:` command suffixes | dropped |
+| statusline stdin protocol, `/tmp` cache files | OMP widget, in-process cache |
+
+Kept because it is generic and load-bearing: the ❌ > ⌛ > ✅ precedence (a failure outranks
+anything still running, so the line cannot claim green while CI is in flight), the CircleCI-style
+check-name normalization, and unresolved review threads — which `gh pr view` cannot report, so it
+takes the GraphQL query CNX already had.
 
 ## Behaviour
 
-- Reads `git branch --show-current`, then `gh pr view <branch> --json …`. No GitHub token of its
-  own — `gh` owns auth.
-- Silent when there is nothing to say: not a git repo, on `main`/`master`/`trunk`/`develop`, no PR
-  for the branch, `gh` missing or unauthenticated.
-- A check that is still running counts as pending, never as a pass — the line cannot claim green
-  while CI is in flight.
-- Redrawn at session start and after every turn; each answer is cached 60s per directory, and every
-  subprocess is capped at 5s. An idle session costs nothing.
+- `git branch --show-current` + `git remote get-url origin`, then `gh pr view <branch> --repo
+  <origin>`, then one `gh api graphql` on the PR url for review threads, reviewers and checks.
+  No token of its own — `gh` owns auth.
+- Silent when there is nothing to say: not a git repo, on `main`/`master`/`trunk`/`develop`, no
+  `origin`, no PR for the branch, `gh` missing or unauthenticated.
+- Merged/closed PRs collapse to one word and skip the detail query.
+- Redrawn at session start and after every turn; cached 60s per directory, every subprocess capped
+  at 8s. An idle session costs nothing.
 
 ## Install
 
 ```bash
 bun install
-omp ext add /Users/aryrabelo/Sites/personal-team/omp-green-gh   # or symlink into ~/.omp/agent/extensions
+ln -s "$PWD" ~/.omp/agent/extensions/omp-green-gh
 ```
 
 Requires `gh` on `PATH` and authenticated (`gh auth status`).
@@ -42,7 +65,5 @@ bun run typecheck
 bun run lint
 ```
 
-`src/pr-status.ts` holds the whole thing: the `gh` call, the rollup fold and the rendering.
-`src/main.ts` is only the wiring into `ctx.ui.setWidget`.
-
-<!-- smoke: proves the widget reads a live PR -->
+`src/pr-status.ts` is the whole thing: the `gh` calls, the check fold, the blocker ladder and the
+rendering (all four pure and tested). `src/main.ts` is only the wiring into `ctx.ui.setWidget`.
