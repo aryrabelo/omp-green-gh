@@ -1,21 +1,22 @@
 /**
  * @aryrabelo/omp-green-gh — the current branch's pull request status, under the editor.
  *
- * Descendant of the Claude Code `statusline.ts` PR block (dotfiles-2025 `dot_claude/statusline.ts`),
- * which only showed `PR #64`. This one answers the question that actually mattered: is it green.
+ * The PR block of the Claude Code CNX statusline (aryrabelo/cnx-claude,
+ * `cnx/statusline/statusline.ts` + `cnx/scripts/lib/pr-status.ts`), cut down to what works in
+ * any repository: no hardcoded owner, no CI check groups, no Linear/Jira, no label squares.
  *
  * ponytail: no refresh timer — the widget is redrawn at session start and at the end of every
- * turn, and `prLine` caches for 60s, so an idle session spends no subprocesses.
+ * turn, and `prRows` caches for 60s, so an idle session spends no subprocesses.
  */
 import type { ExtensionAPI, ExtensionContext } from "@oh-my-pi/pi-coding-agent";
-import { prLine } from "./pr-status";
+import { prRows } from "./pr-status";
 
 const KEY = "green-gh";
 
 async function render(ctx: ExtensionContext): Promise<void> {
 	try {
-		const line = await prLine(process.cwd());
-		ctx.ui.setWidget(KEY, line ? [line] : undefined, {
+		const rows = await prRows(process.cwd());
+		ctx.ui.setWidget(KEY, rows.length > 0 ? rows : undefined, {
 			placement: "belowEditor",
 		});
 	} catch {
