@@ -28,9 +28,10 @@ bun run lint && bun run typecheck && bun test
 ## Conventions
 
 - TypeScript runs in strict mode — keep it type-clean (`bun run typecheck` must pass).
-- Keep the four pure functions in `src/pr-status.ts` (the check fold, the verdict, the
-  blocker ladder, the rendering) free of OMP host imports so they stay unit-testable;
-  all OMP wiring lives in `src/main.ts`.
+- Keep the pure functions in `src/pr-status.ts` (the check fold, the verdict, the
+  blocker ladder, the rendering, the rotation, the `origin` parse) free of OMP host
+  imports so they stay unit-testable; all OMP wiring — the session events and the
+  `/gh-open` and `/green` commands — lives in `src/main.ts`.
 - New pure logic ships with a test in `tests/`.
 - A test must be able to fail for the reason its name claims. Before you commit one,
   ask what you would break to make it go red — if the answer is "nothing", the test

@@ -7,6 +7,47 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-03
+
+### Added
+
+- A second statusline line, published through `ctx.ui.setStatus("gh-pr-others", …)`: one
+  of the repository's *other* open pull requests, labelled `owner/repo#N` (owner and name
+  parsed from `origin`) and carrying its `(i/n)` position in the rotation. It steps to the
+  next pull request on every redraw — session start and end of turn — so a session cycles
+  through all of them. There is still no timer.
+- One extra subprocess for that line, `gh pr list --repo <origin> --state open --limit 20
+  --json number,url,isDraft,mergeable,reviewDecision,statusCheckRollup`: every other open
+  pull request in one round trip, pre-rendered and cached with the rest of the snapshot,
+  so rotating to the next one spawns nothing. Sorted by number descending, capped at 20,
+  with the current branch's own pull request excluded.
+- `/gh-open` — opens a pull request in the browser through `gh pr view --web`. No argument
+  means the current branch's; `7` and `#7` mean pull request 7. An argument that is not a
+  number is refused with a notification, before any subprocess runs.
+- `/green` — sends the agent a prompt to inspect the current branch's pull request with
+  `gh` (failing checks and their logs, unresolved review threads, whether the branch is
+  behind its base, merge conflicts) and fix what is fixable, with instructions not to
+  merge and not to force-push. The command itself runs nothing.
+
+### Changed
+
+- The current branch's line moved from the `z-pr` statusline key to `gh-pr`, so both lines
+  sit together under `gh-pr*`.
+- A trunk branch (`main`, `master`, `trunk`, `develop`) no longer silences the extension
+  entirely: the branch line stays absent there, and the second line still reports the
+  repository's open pull requests.
+- The blocker ladder takes a `reviewersUnknown` flag, and the second line sets it: since
+  `gh pr list` cannot report reviewer counts, that line skips the "Set reviewers" rung
+  instead of claiming it off a count that was never fetched. It also carries no `💬 N`,
+  which would cost a GraphQL query per pull request.
+- `prStatusLine` is replaced by `prLines(cwd, { now?, tick? })`, which returns both lines;
+  `tick` selects which other pull request is shown.
+
+### Fixed
+
+- A cleared statusline line is now really cleared: it is passed to `setStatus` as
+  `undefined`, where the previous `?? ""` left an empty segment on screen.
+
 ## [0.1.0] - 2026-09-03
 
 First release of omp-green-gh: an OMP (Oh My Pi) extension that answers, in the
@@ -50,5 +91,6 @@ statusline, whether the current branch's pull request is green and what is block
   check-group name lists, the `preview-app`/`canix-UAT` label squares, the Linear and Jira
   gates, and the `/cnx:` command suffixes.
 
-[Unreleased]: https://github.com/aryrabelo/omp-green-gh/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/aryrabelo/omp-green-gh/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/aryrabelo/omp-green-gh/releases/tag/v0.2.0
 [0.1.0]: https://github.com/aryrabelo/omp-green-gh/releases/tag/v0.1.0

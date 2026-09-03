@@ -7,8 +7,8 @@
  * `entrc/entrc-backend`, the CircleCI check groups, the `preview-app`/`canix-UAT` label squares,
  * the Linear/Jira gates and the `/cnx:` command suffixes.
  *
- * Four cheap subprocesses behind one 60s cache:
- *   1. `git branch --show-current` + `git remote get-url origin` — which branch, which repo.
+ * Five cheap subprocesses behind one 60s cache:
+ *   1. `git branch --show-current` and `git remote get-url origin` — which branch, which repo.
  *   2. `gh pr view <branch> --repo <origin>` — is there a PR, and its url.
  *   3. `gh api graphql` on that url — unresolved review threads, which `gh pr view` cannot
  *      report at all, plus reviewers and the check rollup in the same round trip.
