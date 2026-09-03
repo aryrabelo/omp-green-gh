@@ -5,7 +5,15 @@
 	"type": "module",
 	"license": "MIT",
 	"author": "Ary Rabelo",
-	"private": true,
+	"publishConfig": {
+		"access": "public"
+	},
+	"files": [
+		"src",
+		"README.md",
+		"CHANGELOG.md",
+		"LICENSE"
+	],
 	"repository": {
 		"type": "git",
 		"url": "git+https://github.com/aryrabelo/omp-green-gh.git"
