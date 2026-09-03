@@ -184,14 +184,13 @@ describe("nextAction", () => {
 
 describe("renderStatus", () => {
 	test("nothing to show without a PR", () => {
-		expect(renderStatus(undefined)).toEqual([]);
+		expect(renderStatus(undefined)).toBeUndefined();
 	});
 
-	test("green and approved: status line plus next action", () => {
-		expect(renderStatus(pr()).map(plain)).toEqual([
-			"PR #64 ✅ 1/1 · approved",
-			"→ Merge PR",
-		]);
+	test("green and approved: status plus the next action, one line", () => {
+		expect(plain(renderStatus(pr()))).toBe(
+			"PR #64 ✅ 1/1 · approved → Merge PR",
+		);
 	});
 
 	test("the failing count is the number shown", () => {
@@ -205,9 +204,9 @@ describe("renderStatus", () => {
 							check({ conclusion: "ERROR" }),
 						],
 					}),
-				)[0],
+				),
 			),
-		).toBe("PR #64 ❌ 2/3 · approved");
+		).toBe("PR #64 ❌ 2/3 · approved → Corrigir CI");
 	});
 
 	test("draft, review verdict, unresolved threads and conflicts all ride along", () => {
@@ -220,28 +219,31 @@ describe("renderStatus", () => {
 						unresolvedComments: 3,
 						mergeable: "CONFLICTING",
 					}),
-				)[0],
+				),
 			),
-		).toBe("PR #64 draft · ✅ 1/1 · changes requested · 💬 3 · conflicts");
-	});
-
-	test("a PR without checks says so instead of claiming green", () => {
-		expect(plain(renderStatus(pr({ checks: [] }))[0])).toBe(
-			"PR #64 no checks · approved",
+		).toBe(
+			"PR #64 draft · ✅ 1/1 · changes requested · 💬 3 · conflicts → Resolver conflitos com a base",
 		);
 	});
 
-	test("terminal states collapse to one word", () => {
-		expect(renderStatus(pr({ state: "MERGED" })).map(plain)).toEqual([
-			"PR #64 merged",
-		]);
-		expect(renderStatus(pr({ state: "CLOSED" })).map(plain)).toEqual([
-			"PR #64 closed",
-		]);
+	test("a PR without checks says so instead of claiming green", () => {
+		expect(plain(renderStatus(pr({ checks: [] })))).toBe(
+			"PR #64 no checks · approved → Merge PR",
+		);
+	});
+
+	test("terminal states collapse to one word, with no next action", () => {
+		expect(plain(renderStatus(pr({ state: "MERGED" })))).toBe("PR #64 merged");
+		expect(plain(renderStatus(pr({ state: "CLOSED" })))).toBe("PR #64 closed");
+	});
+
+	test("the line never contains a newline", () => {
+		// setStatus collapses newlines to spaces; a multi-line render would be silently mangled.
+		expect(renderStatus(pr({ unresolvedComments: 2 }))).not.toContain("\n");
 	});
 
 	test("the PR number is a hyperlink to the PR", () => {
-		expect(renderStatus(pr())[0]).toContain(
+		expect(renderStatus(pr())).toContain(
 			`${ESC}]8;;https://github.com/o/r/pull/64${ESC}\\`,
 		);
 	});

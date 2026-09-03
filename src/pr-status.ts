@@ -134,21 +134,20 @@ export function nextAction(pr: PrStatus): string {
 }
 
 /**
- * The widget rows: status on the first, the next action on the second.
- *
- * `PR #64 ✅ 12/12 · approved · 💬 2`
- * `→ Resolver 2 review comments`
+ * The statusline segment: `PR #64 ✅ 12/12 · approved → Merge PR`, or undefined when there is no
+ * PR. One line on purpose — `ctx.ui.setStatus` sanitizes newlines and truncates to the terminal
+ * width, so the next action rides inline after the arrow.
  */
-export function renderStatus(pr: PrStatus | undefined): string[] {
-	if (!pr) return [];
+export function renderStatus(pr: PrStatus | undefined): string | undefined {
+	if (!pr) return undefined;
 	// OSC8 hyperlink, so `#64` is clickable in terminals that support it.
 	const label = pr.url
 		? `\x1b]8;;${pr.url}\x1b\\${CYAN}#${pr.number}${RESET}\x1b]8;;\x1b\\`
 		: `#${pr.number}`;
 	const head = `PR ${label}`;
 
-	if (pr.state === "MERGED") return [`${head} ${GREEN}merged${RESET}`];
-	if (pr.state === "CLOSED") return [`${head} ${RED}closed${RESET}`];
+	if (pr.state === "MERGED") return `${head} ${GREEN}merged${RESET}`;
+	if (pr.state === "CLOSED") return `${head} ${RED}closed${RESET}`;
 
 	const counts = countChecks(pr.checks);
 	const emoji = checksEmoji(counts);
@@ -176,10 +175,9 @@ export function renderStatus(pr: PrStatus | undefined): string[] {
 		parts.push(`${YELLOW}💬 ${pr.unresolvedComments}${RESET}`);
 	if (pr.mergeable === "CONFLICTING") parts.push(`${RED}conflicts${RESET}`);
 
-	const rows = [`${head} ${parts.join(` ${DIM}·${RESET} `)}`];
+	const line = `${head} ${parts.join(` ${DIM}·${RESET} `)}`;
 	const action = nextAction(pr);
-	if (action) rows.push(`${DIM}→ ${action}${RESET}`);
-	return rows;
+	return action ? `${line} ${DIM}→ ${action}${RESET}` : line;
 }
 
 /** Run a command, returning its stdout, or "" for any failure (missing binary, non-zero, hang). */
@@ -293,28 +291,28 @@ async function fetchDetail(url: string, cwd: string): Promise<PrDetail> {
 	}
 }
 
-async function load(cwd: string): Promise<string[]> {
+async function load(cwd: string): Promise<string | undefined> {
 	const branch = await run(["git", "branch", "--show-current"], cwd);
-	if (!branch || TRUNK[branch]) return [];
+	if (!branch || TRUNK[branch]) return undefined;
 
 	// The repo is whatever `origin` points at — never configured, never guessed from the path.
 	const origin = await run(["git", "remote", "get-url", "origin"], cwd);
-	if (!origin) return [];
+	if (!origin) return undefined;
 
 	const fields = "number,url,state,isDraft,mergeable,reviewDecision";
 	const out = await run(
 		["gh", "pr", "view", branch, "--repo", origin, "--json", fields],
 		cwd,
 	);
-	if (!out) return [];
+	if (!out) return undefined;
 	let view: PrView;
 	try {
 		// Trusted shape: `gh`'s own --json contract.
 		view = JSON.parse(out) as PrView;
 	} catch {
-		return [];
+		return undefined;
 	}
-	if (!view.number) return [];
+	if (!view.number) return undefined;
 
 	const base: PrStatus = {
 		number: view.number,
@@ -333,17 +331,20 @@ async function load(cwd: string): Promise<string[]> {
 }
 
 /** cwd -> last answer, so a redraw between turns costs nothing. */
-const cache = new Map<string, { at: number; rows: string[] }>();
+const cache = new Map<string, { at: number; line?: string }>();
 
 /**
- * The widget rows for `cwd`'s branch, empty when there is nothing to show (not a repo, on trunk,
- * no `origin`, no PR, no `gh`). Cached for a minute per directory.
+ * The statusline segment for `cwd`'s branch, undefined when there is nothing to show (not a repo,
+ * on trunk, no `origin`, no PR, no `gh`). Cached for a minute per directory.
  */
-export async function prRows(cwd: string, now = Date.now()): Promise<string[]> {
+export async function prLine(
+	cwd: string,
+	now = Date.now(),
+): Promise<string | undefined> {
 	const hit = cache.get(cwd);
-	if (hit && now - hit.at < TTL_MS) return hit.rows;
+	if (hit && now - hit.at < TTL_MS) return hit.line;
 
-	const rows = await load(cwd);
-	cache.set(cwd, { at: now, rows });
-	return rows;
+	const line = await load(cwd);
+	cache.set(cwd, { at: now, line });
+	return line;
 }
